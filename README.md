@@ -18,18 +18,17 @@ Andreas Aristidou and Joan Lasenby, Inverse Kinematics: a review of existing tec
 
 IK and Quaternions
 ------------------
-Quaternions allow for several benefits over Euler angles. First, axis boundaries are greatly simplified as quaternions can interpolate thru two arbitrary vectors. Second, IK requires incremental changes in angles which are well suited to quaternions. Third, quaternions are more efficient to compute for certain operations.
+Quaternions allow for several benefits over Euler angles. First, axis boundaries are greatly simplified as quaternions can interpolate thru two arbitrary vectors. Second, IK requires incremental changes in angles which are well suited to quaternions. Third, quaternions are more efficient to compute for certain operations. 
 
 There are two drawbacks to using quaternions for inverse kinematics. Per-axis angle range limits are more easily computed with Euler angles, so there is a conversion performed in the LimitQuaternion function to handle this. Finally, care must be taken to normalize the quaternions frequently during calculations. 
 
-A key operation during IK is to rotate a joint around its local coordinate X,Y or Z axis by an incremental angle. This is easily accomplished by observing that a joint which is oriented by a quaternion is **locally** rotated by performed a post-multiplying with another quaternion.
+Quaternions can represent an orientation (a local coordinate system), or they can represent a rotation (amount to rotate around a given axis), which makes it easy to compute changes in orientation. For example, a key operation during IK is to rotate a joint around its local coordinate X,Y or Z axis by an incremental angle. This is easily accomplished by observing that a joint which is oriented by a quaternion is **locally** rotated by performed a post-multiplying with a rotational quaternion.
 <br><br>
 P.fromAngleAxis ( angle, Vector3DF(0, 1, 0) );    // where angle is a scalar, vec<0,1,0> = Y-axis<br>
 Q = Q * P;         // post-multiply to perform a rotation around the **local** Y-axis of Q.<br>
 Q = P * Q;         // pre-multiply to perform a rotation around the **global** Y-axis of Q.<br>
 <br>
-Notice the output Q is not a point but another quaternion (a different orientation).
-
+Where Q is a quaternion for local orientation, and P is a rotational quaternion. Notice the output Q is not a point but another quaternion (a new orientation).
 
 Revision History
 --------
