@@ -23,11 +23,11 @@ Quaternions allow for several benefits over Euler angles. First, axis boundaries
 There are two drawbacks to using quaternions for inverse kinematics. Per-axis angle range limits are more easily computed with Euler angles, so there is a conversion performed in the LimitQuaternion function to handle this. Finally, care must be taken to normalize the quaternions frequently during calculations. 
 
 A key operation during IK is to rotate a joint around its local coordinate X,Y or Z axis by an incremental angle. This is easily accomplished by observing that a joint which is oriented by a quaternion is **locally** rotated by performed a post-multiplying with another quaternion.
-
-P.fromAngleAxis ( angle, Vector3DF(0, 1, 0) );    // where angle is a scalar, vec<0,1,0> = Y-axis
-Q = Q * P;         // post-multiply to perform a rotation around the **local** Y-axis of Q.
-Q = P * Q;         // pre-multiply to perform a rotation around the **global** Y-axis of Q.
-
+<br>
+P.fromAngleAxis ( angle, Vector3DF(0, 1, 0) );    // where angle is a scalar, vec<0,1,0> = Y-axis<br>
+Q = Q * P;         // post-multiply to perform a rotation around the **local** Y-axis of Q.<br>
+Q = P * Q;         // pre-multiply to perform a rotation around the **global** Y-axis of Q.<br>
+<br><br>
 Notice the output Q is not a point but another quaternion (a different orientation).
 
 
