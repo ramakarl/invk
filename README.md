@@ -3,7 +3,7 @@
 InvK - Inverse Kinematics Library using Quaternions
 ------------------------------------------------
 
-by Rama Hoetzlein (ramakarl.com)
+by Rama Hoetzlein ([ramakarl.com](http://ramakarl.com))
 
 This is a simple library that demonsrates an efficient solution to
 inverse kinematic chains using the Jacobian Transpose method over
