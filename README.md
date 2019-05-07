@@ -10,7 +10,14 @@ inverse kinematic chains using the Jacobian Transpose method over
 quaternions. The goal of this library is to enable a baseline 
 implementation with few dependencies upon which to build larger projects.
 
-Some useful reading material:
+**Video demo here**:<br>
+[Youtube link](https://youtu.be/j6bwD-kF_BI)<br>
+
+**Citations**:
+You can cite this work as follows:<br>
+Hoetzlein, Rama. "INVK - A lightweight Inverse Kinematics Library using Quaternions", May 6th, 2019. Online at: github.com/ramakarl/invk<br>
+<br>
+More useful reading material:
 <br>
 Steve Rotenberg, Inverse Kinematics (part 1), UCSB. [Slides](https://cseweb.ucsd.edu/classes/wi17/cse169-a/slides/CSE169_08.pdf)<br>
 Steve Rotenberg, Inverse Kinematics (part 2), UCSB. [Slides](https://cseweb.ucsd.edu/classes/wi17/cse169-a/slides/CSE169_09.pdf)<br>
