@@ -11,9 +11,10 @@ quaternions. The goal of this library is to enable a baseline
 implementation with few dependencies upon which to build larger projects.
 
 Some useful reading material:
-[Steve Rotenberg, Inverse Kinematics (part 1), UCSB](https://cseweb.ucsd.edu/classes/wi17/cse169-a/slides/CSE169_08.pdf)
-[Steve Rotenberg, Inverse Kinematics (part 2), UCSB](https://cseweb.ucsd.edu/classes/wi17/cse169-a/slides/CSE169_09.pdf)
-[Andreas Aristidou and Joan Lasenby, Inverse Kinematics: a review of existing techniques and introduction of a new fast iterative solver](http://www.andreasaristidou.com/publications/papers/CUEDF-INFENG,%20TR-632.pdf)
+<br>
+Steve Rotenberg, Inverse Kinematics (part 1), UCSB. [Slides](https://cseweb.ucsd.edu/classes/wi17/cse169-a/slides/CSE169_08.pdf)<br>
+Steve Rotenberg, Inverse Kinematics (part 2), UCSB. [Slides](https://cseweb.ucsd.edu/classes/wi17/cse169-a/slides/CSE169_09.pdf)<br>
+Andreas Aristidou and Joan Lasenby, Inverse Kinematics: a review of existing techniques and introduction of a new fast iterative solver. [Tech Report](http://www.andreasaristidou.com/publications/papers/CUEDF-INFENG,%20TR-632.pdf)<br>
 
 Revision History
 --------
