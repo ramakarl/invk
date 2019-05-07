@@ -16,6 +16,21 @@ Steve Rotenberg, Inverse Kinematics (part 1), UCSB. [Slides](https://cseweb.ucsd
 Steve Rotenberg, Inverse Kinematics (part 2), UCSB. [Slides](https://cseweb.ucsd.edu/classes/wi17/cse169-a/slides/CSE169_09.pdf)<br>
 Andreas Aristidou and Joan Lasenby, Inverse Kinematics: a review of existing techniques and introduction of a new fast iterative solver. [Tech Report](http://www.andreasaristidou.com/publications/papers/CUEDF-INFENG,%20TR-632.pdf)<br>
 
+IK and Quaternions
+------------------
+Quaternions allow for several benefits over Euler angles. First, axis boundaries are greatly simplified as quaternions can interpolate thru two arbitrary vectors. Second, IK requires incremental changes in angles which are well suited to quaternions. Third, quaternions are more efficient to compute for certain operations.
+
+There are two drawbacks to quaternion IK. Per-axis angle range limits are more easily computed with Euler angles, so there is a conversion performed in the LimitQuaternion function to handle this. Finally, care must be taken to normalize the quaternions frequently during calculations. 
+
+A key operation during IK to rotate a joint around its local coordinate X,Y or Z axis by an incremental amount. This is easily accomplished by observing that a joint oriented by a quaternion is **locally** rotated by performed a post-multiplying with another quaternion.
+
+P.fromAngleAxis ( angle, Vector3DF(0, 1, 0) );    // where angle is a scalar, vec<0,1,0> = Y-axis
+Q = Q * P;         // post-multiply to perform a rotation around the **local** Y-axis of Q.
+Q = P * Q;         // pre-multiply to perform a rotation around the **global** Y-axis of Q.
+
+Notice the output Q is not a point but another quaternion (a different orientation).
+
+
 Revision History
 --------
 May 6, 2019 - v1.0 - Support for hinge and ball joints, with joint limits. 
