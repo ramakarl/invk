@@ -399,7 +399,7 @@ Vector4DF &Vector4DF::Cross (const Vector4DF &v) {
 	y = (VTYPE) (-ax * (double) v.z + az * (double) v.x); 
 	z = (VTYPE) (ax * (double) v.y - ay * (double) v.x); 
 	w = (VTYPE) 0; 
-	return Vector4DF(x,y,z,w);
+  return *this;
 }
 		
 double Vector4DF::Dot(const Vector4DF &v)			{double dot; dot = (double) x*v.x + (double) y*v.y + (double) z*v.z + (double) w*v.w; return dot;}
@@ -1702,7 +1702,7 @@ MatrixF &MatrixF::operator+= (const MatrixF &op)		{
 		}
 		fprintf ( fp, "%s\n", buf);
 	}
-	fprintf ( fp, "---------------------------------------\n", buf);
+	fprintf ( fp, "---------------------------------------\n%s\n", buf);
 	fflush ( fp );
 	fclose ( fp );	
 }

@@ -115,6 +115,7 @@ bool readword ( char *line, char delim, char *word, int max_size )
 {
 	char *buf_pos;
 	char *start_pos;	
+  long long _sz=0;
 
 	// read past spaces/tabs, or until end of line/string
 	for (buf_pos=line; (*buf_pos==' ' || *buf_pos=='\t') && *buf_pos!='\n' && *buf_pos!='\0';)
@@ -128,14 +129,22 @@ bool readword ( char *line, char delim, char *word, int max_size )
 		buf_pos++;
 	
 	if (*buf_pos=='\n' || *buf_pos=='\0') {	// buf_pos now points to the end of buffer
-        strncpy_s (word, max_size, start_pos, max_size);	// copy word to output string
+        //strncpy_s (word, max_size, start_pos, max_size);	// copy word to output string
+        strncpy (word, start_pos, max_size);	// copy word to output string
+        if (max_size>0) {
+          word[max_size-1] = '\0';
+        }
 		if ( *buf_pos=='\n') *(word + strlen(word)-1) = '\0';
 		*line = '\0';						// clear input buffer
 	} else {
 											// buf_pos now points to the delimiter after word
 		*buf_pos++ = '\0';					// replace delimiter with end-of-word marker
-		strncpy_s ( word, max_size, start_pos, (long long) (buf_pos-line) );	// copy word(s) string to output string			
+		//strncpy_s ( word, max_size, start_pos, (long long) (buf_pos-line) );	// copy word(s) string to output string			
 											// move start_pos to beginning of entire buffer
+    _sz = ( (max_size < ((long long)(buf_pos-line))) ? max_size : ((long long)(buf_pos-line)) );
+    strncpy(word, start_pos, _sz);
+    if (_sz>0) { word[_sz-1]='\0'; }
+
 		strcpy ( start_pos, buf_pos );		// copy remainder of buffer to beginning of buffer
 	}
 	return true;						// return word(s) copied	

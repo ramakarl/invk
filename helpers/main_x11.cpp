@@ -45,6 +45,12 @@
 #include<unistd.h>
 #include<sys/timeb.h>
 
+#include <stdlib.h>
+#include <string.h>
+#include <X11/Xlib.h>
+#include <X11/Xutil.h>
+#include <X11/X.h>
+
 Display *g_dpy = 0;
 
 std::vector<NVPWindow*> g_windows;
@@ -208,24 +214,38 @@ bool initBase(const NVPWindow::ContextFlags *cflags, NVPWindow *sourceWindow);
 
 };
 
+int x_error_handler(Display *d, XErrorEvent *e) {
+  char buf[1024];
+
+  XGetErrorText(d, e->error_code, buf, 1023);
+  fprintf(stderr, "x error: error code: %i \"%s\"\n", e->error_code, buf);
+
+  //std::cerr << "Error code: " << e->error_code << std::endl;
+  return 0;
+}
+
 #define ATTRIB(a,b) { attribList.push_back(a); attribList.push_back(b); }  
 
 bool WINinternal::initBase(const NVPWindow::ContextFlags *cflags, NVPWindow *sourceWindow)
 {
 	std::vector<int> attribList;		
 	bool avail_opengl32_ctxattrib = false;
+  glXCreateContextAttribsARBProc _glXCreateContextAttribsARB;
+
 
     NVPWindow::ContextFlags settings;
     if(cflags){
         settings = *cflags;
     }
 
+    int screen = DefaultScreen(m_dpy);
+
     const char *glxExts = glXQueryExtensionsString(m_dpy,DefaultScreen(m_dpy));
 	ctxErrorOccurred = false;
     int (*oldHandler) (Display *, XErrorEvent*) = XSetErrorHandler(&ctxErrorHandler);
 
 	// Check for OpenGL 3.2+ functions	
-	avail_opengl32_ctxattrib = ((glXCreateContexAttribsARB = (glXCreateContextAttribsARBProc) glXGetProcAddress( "glXCreateContextAttribsARB" )) != NULL);
+	avail_opengl32_ctxattrib = ((_glXCreateContextAttribsARB = (glXCreateContextAttribsARBProc) glXGetProcAddress( (GLubyte *)"glXCreateContextAttribsARB" )) != NULL);
 
 	if ( avail_opengl32_ctxattrib) {
 		#define GLCOMPAT
@@ -233,37 +253,43 @@ bool WINinternal::initBase(const NVPWindow::ContextFlags *cflags, NVPWindow *sou
 		// Use modern functions to choose pixel format 
 		attribList.clear ();
 		ATTRIB ( GLX_X_RENDERABLE    , True );
-		ATTRIB ( GLX_DRAWGLX_DRAWABLE_TYPE   , GLX_WINDOW_BIT );
-		ATTRIB ( GLX_DRAWGLX_RENDER_TYPE     , GLX_RGBA_BIT );
-		ATTRIB ( GLX_DRAWGLX_X_VISUAL_TYPE   , GLX_TRUE_COLOR );
-		ATTRIB ( GLX_DRAWGLX_RED_SIZE        , 8 );
-		ATTRIB ( GLX_DRAWGLX_GREEN_SIZE      , 8 );
-		ATTRIB ( GLX_DRAWGLX_BLUE_SIZE       , 8 );
-		ATTRIB ( GLX_DRAWGLX_ALPHA_SIZE      , 8 );
-		ATTRIB ( GLX_DRAWGLX_DEPTH_SIZE      , 24 );
-		ATTRIB ( GLX_DRAWGLX_STENCIL_SIZE    , 8 );
-		ATTRIB ( GLX_DRAWGLX_DOUBLEBUFFER    , True );
+		ATTRIB ( GLX_DRAWABLE_TYPE   , GLX_WINDOW_BIT );
+		ATTRIB ( GLX_RENDER_TYPE     , GLX_RGBA_BIT );
+		ATTRIB ( GLX_X_VISUAL_TYPE   , GLX_TRUE_COLOR );
+		ATTRIB ( GLX_RED_SIZE        , 8 );
+		ATTRIB ( GLX_GREEN_SIZE      , 8 );
+		ATTRIB ( GLX_BLUE_SIZE       , 8 );
+		ATTRIB ( GLX_ALPHA_SIZE      , 8 );
+		ATTRIB ( GLX_DEPTH_SIZE      , 24 );
+		ATTRIB ( GLX_STENCIL_SIZE    , 8 );
+		ATTRIB ( GLX_DOUBLEBUFFER    , True );
 		if ( settings.MSAA > 1 ) {
-			ATTRIB ( GLX_DRAWGLX_SAMPLE_BUFFERS  , 1 ); 
-			ATTRIB ( GLX_DRAWGLX_SAMPLES         , settings.MSAA );
+			ATTRIB ( GLX_SAMPLE_BUFFERS  , 1 ); 
+			ATTRIB ( GLX_SAMPLES         , settings.MSAA );
 		}
 		ATTRIB ( 0, 0 );
   
 		// Choose modern OpenGL pixel format
 		GLXFBConfig fbconfig = 0;
 		int         fbcount;
-		GLXFBConfig* fbc = glXChooseFBConfig( display, screen, &(attribList[0]), &fbcount );
+    int screen = DefaultScreen(m_dpy);
+		GLXFBConfig* fbc = glXChooseFBConfig( m_dpy, screen, &(attribList[0]), &fbcount );
 		if ( fbc==0x0 || fbcount==0 ) {
 			printf ( "ERROR: Unable to choose FB config (OpenGL 3.2+).\n" );
 			nverror();
 		}
+
+    //DEBUG
+		nvprintf ( "Using Modern GL Version: %d.%d %s\n", settings.major, settings.minor, (settings.core) ? "core" : "compat" );
+    XSetErrorHandler(x_error_handler);
+
 		// Create modern OpenGL context
 		attribList.clear ();
 		ATTRIB ( GLX_CONTEXT_MAJOR_VERSION_ARB, settings.major )
-        ATTRIB ( GLX_CONTEXT_MINOR_VERSION_ARB, settings.minor )
+    ATTRIB ( GLX_CONTEXT_MINOR_VERSION_ARB, settings.minor )
 		ATTRIB ( GLX_CONTEXT_PROFILE_MASK_ARB, settings.core ? GLX_CONTEXT_CORE_PROFILE_BIT_ARB:GLX_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB )
 		ATTRIB ( 0, 0 );
-		m_glx_context = glXCreateContextAttribsARB (m_dpy, m_glx_fb_config, 0, True, &(attribList[0]) );
+		m_glx_context = _glXCreateContextAttribsARB (m_dpy, m_glx_fb_config, 0, True, &(attribList[0]) );
 		if ( m_glx_context==NULL ) {
 			printf ( "ERROR: Unable to create context with attribs (OpenGL 3.2+).\n" );
 			nverror();
@@ -280,7 +306,7 @@ bool WINinternal::initBase(const NVPWindow::ContextFlags *cflags, NVPWindow *sou
 		ATTRIB ( GLX_DOUBLEBUFFER, 1 );
 		ATTRIB ( 0, 0 );
 		XVisualInfo* vi = NULL;
-		if ( !(vi = glXChooseVisual(dpy, DefaultScreen(dpy), &attribList[0] ))) {
+		if ( !(vi = glXChooseVisual(m_dpy, DefaultScreen(m_dpy), &attribList[0] ))) {
 			printf ( "ERROR: Unable to choose visual (OpenGL pre-3.2).\n" );
 			nverror();
 		}
@@ -909,7 +935,7 @@ void NVPWindow::initScreenQuadGL()
 	if (!status) {
 		nvprintf("*** Error! Failed to link in init_screenquad\n");
 	}
-	checkGL ( "glLinkProgram (init_screenquad)" );
+	checkGL ( (char *)"glLinkProgram (init_screenquad)" );
 	
 	// Get texture parameter
 	m_screenquad_utex1 = glGetUniformLocation (m_screenquad_prog, "uTex1" );
@@ -931,19 +957,19 @@ void NVPWindow::initScreenQuadGL()
 
 	glGenBuffers(1, (GLuint*)&m_screenquad_vbo[0]);
 	glGenBuffers(1, (GLuint*)&m_screenquad_vbo[1]);
-	checkGL("glGenBuffers (init_screenquad)");
+	checkGL( (char *)"glGenBuffers (init_screenquad)");
 	glGenVertexArrays(1, (GLuint*)&m_screenquad_vbo[2]);
 	glBindVertexArray(m_screenquad_vbo[2]);
-	checkGL("glGenVertexArrays (init_screenquad)");
+	checkGL( (char *)"glGenVertexArrays (init_screenquad)");
 	glBindBuffer(GL_ARRAY_BUFFER, m_screenquad_vbo[0]);
 	glBufferData(GL_ARRAY_BUFFER, verts.size() * sizeof(nvVertex), &verts[0].x, GL_STATIC_DRAW_ARB);
-	checkGL("glBufferData[V] (init_screenquad)");
+	checkGL( (char *)"glBufferData[V] (init_screenquad)");
 	glVertexAttribPointer(0, 3, GL_FLOAT, false, sizeof(nvVertex), 0);				// pos
 	glVertexAttribPointer(1, 3, GL_FLOAT, false, sizeof(nvVertex), (void*)12);	// norm
 	glVertexAttribPointer(2, 3, GL_FLOAT, false, sizeof(nvVertex), (void*)24);	// texcoord
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_screenquad_vbo[1]);
 	glBufferData(GL_ELEMENT_ARRAY_BUFFER, faces.size() * 3 * sizeof(int), &faces[0].a, GL_STATIC_DRAW_ARB);
-	checkGL("glBufferData[F] (init_screenquad)");
+	checkGL( (char *)"glBufferData[F] (init_screenquad)");
 	glBindVertexArray(0);
 }
 
@@ -961,14 +987,14 @@ void NVPWindow::createScreenQuadGL ( int* glid, int w, int h )
 	if ( *glid == -1 ) glDeleteTextures ( 1, (GLuint*) glid );
 	glGenTextures ( 1, (GLuint*) glid );
 	glBindTexture ( GL_TEXTURE_2D, *glid );
-	checkGL ( "glBindTexture (createScreenQuadGL)" );
+	checkGL ( (char *)"glBindTexture (createScreenQuadGL)" );
 	glPixelStorei ( GL_UNPACK_ALIGNMENT, 4 );	
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST );
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST );
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);	
 	glTexImage2D  ( GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);	
-	checkGL ( "glTexImage2D (createScreenQuadGL)" );
+	checkGL ( (char *)"glTexImage2D (createScreenQuadGL)" );
 	glBindTexture ( GL_TEXTURE_2D, 0 );
 }
 
@@ -998,7 +1024,7 @@ void NVPWindow::renderScreenQuadGL ( int glid1, int glid2, float x1, float y1, f
 	// Select shader	
 	glBindVertexArray(m_screenquad_vbo[2]);
 	glUseProgram(m_screenquad_prog);
-	checkGL("glUseProgram");
+	checkGL( (char *)"glUseProgram");
 	// Select VBO	
 	glBindBuffer(GL_ARRAY_BUFFER, m_screenquad_vbo[0]);
 	glVertexAttribPointer(0, 3, GL_FLOAT, false, sizeof(nvVertex), 0);
@@ -1008,7 +1034,7 @@ void NVPWindow::renderScreenQuadGL ( int glid1, int glid2, float x1, float y1, f
 	glEnableVertexAttribArray(1);
 	glEnableVertexAttribArray(2);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_screenquad_vbo[1]);
-	checkGL("glBindBuffer");
+	checkGL( (char *)"glBindBuffer");
 	// Select texture
 	glEnable ( GL_TEXTURE_2D );
 	glProgramUniform4f ( m_screenquad_prog, m_screenquad_ucoords, x1, y1, x2, y2 );
@@ -1033,7 +1059,7 @@ void NVPWindow::renderScreenQuadGL ( int glid1, int glid2, float x1, float y1, f
 
 	// Draw
 	glDrawElementsInstanced(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0, 1);
-	checkGL("glDraw");
+	checkGL( (char *)"glDraw");
 	glUseProgram(0);
 
 	glDepthMask(GL_TRUE);
@@ -1090,8 +1116,10 @@ void NVPWindow::save_frame ( char* fname )
 		memcpy ( pixbuf + ((h-y-1)*pitch), buf, pitch );
 	}
 
+#ifdef BUILD_PNG
 	// Save png
 	save_png ( fname, pixbuf, w, h, 3 );
+#endif
 
 	free ( pixbuf );
 	free ( buf );
@@ -1207,7 +1235,7 @@ bool WINinternal::create(const char *title,int width, int height){
         CWBorderPixel | CWColormap | CWEventMask | CWOverrideRedirect,&swa);
     sleep(1);
 
-    printf("Window : %d.\n",m_window);
+    printf("Window : %d.\n", (int)m_window);
     XFree(vi);
     
     XSetStandardProperties(m_dpy,m_window,title,title,None,NULL,0,NULL);
@@ -1346,7 +1374,7 @@ void nvprintfLevel(int level, const char * fmt, ...)
 
 void nverror ()
 {
-	nvprintf ( "Error. Application will exit." );
+	nvprintf ( "Error. Application will exit.\n" );
 	exit(-1);
 }
 bool getFileLocation ( char* filename, char* outpath )
@@ -1377,3 +1405,64 @@ bool getFileLocation ( char* filename, char* outpath, std::vector<std::string> s
 	return found;
 }
 //------------------------------------------------------------------------------
+
+//----------------------------- Log files
+std::string mLogFile;
+FILE*   mLogFP = 0x0;
+
+void checkpointf ( )
+{
+  for (int n=0; n < g_windows.size(); n++)
+    g_windows[n]->checkpoint();
+}
+void start_log(char* fname)
+{
+  mLogFile = fname;
+  mLogFP = fopen(fname, "wt");
+}
+void msgf(const char * fmt, ...)
+{
+  char buf[4096];
+  va_list  vlist;
+  va_start(vlist, fmt);
+  vsnprintf(buf, 4096, fmt, vlist);
+  va_end(vlist);
+
+  printf ( "%s\n", buf );
+  if ( mLogFP != 0x0) {
+    fwrite(buf, strlen(buf), 1, mLogFP);
+    fflush(mLogFP);
+  }
+}
+
+void logf(const char * fmt, ...)
+{
+  if (mLogFP == 0) return;
+
+  char buf[4096];
+  va_list  vlist;
+  va_start(vlist, fmt);
+  vsnprintf(buf, 4096, fmt, vlist);
+  va_end(vlist);
+
+  fwrite(buf, strlen(buf), 1, mLogFP);
+  fflush(mLogFP);
+}
+void errorf(const char * fmt, ...)
+{
+  char buf[4096];
+  va_list  vlist;
+  va_start(vlist, fmt);
+  vsnprintf(buf, 4096, fmt, vlist);
+  va_end(vlist);
+
+  printf("%s\n", buf);
+  if (mLogFP != 0) {
+    fprintf( mLogFP, "*****\n" );
+    fwrite(buf, strlen(buf), 1, mLogFP);
+    fflush(mLogFP);
+  }
+}
+
+
+
