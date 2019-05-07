@@ -20,7 +20,7 @@ IK and Quaternions
 ------------------
 Quaternions allow for several benefits over Euler angles. First, axis boundaries are greatly simplified as quaternions can interpolate thru two arbitrary vectors. Second, IK requires incremental changes in angles which are well suited to quaternions. Third, quaternions are more efficient to compute for certain operations.
 
-There are two drawbacks to quaternion IK. Per-axis angle range limits are more easily computed with Euler angles, so there is a conversion performed in the LimitQuaternion function to handle this. Finally, care must be taken to normalize the quaternions frequently during calculations. 
+There are two drawbacks to using quaternions for inverse kinematics. Per-axis angle range limits are more easily computed with Euler angles, so there is a conversion performed in the LimitQuaternion function to handle this. Finally, care must be taken to normalize the quaternions frequently during calculations. 
 
 A key operation during IK to rotate a joint around its local coordinate X,Y or Z axis by an incremental amount. This is easily accomplished by observing that a joint oriented by a quaternion is **locally** rotated by performed a post-multiplying with another quaternion.
 
