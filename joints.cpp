@@ -381,7 +381,7 @@ void Joints::ApplyJacobianTranspose ( float amt )
 		}
 
 		m_Joints[n].orient.toEuler ( angs );		
-		printf ("J%d  <%3.2f, %3.2f, %3.2f>  %3.2f\n", n, angs.x, angs.y, angs.z, a1.z );
+		//printf ("J%d  <%3.2f, %3.2f, %3.2f>  %3.2f\n", n, angs.x, angs.y, angs.z, a1.z );
 	}
 
 }

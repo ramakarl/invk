@@ -56,8 +56,8 @@ struct WINinternal
   NVPWindow * m_win;
   HDC   m_hDC;
   HGLRC m_hRC;
-  HWND  m_hWnd;
-  HWND  m_hWndDummy;
+  HWND  m_hWnd;  
+  HWND  m_hTempWnd;
   bool  m_iconified;
   bool  m_visible;
 
@@ -65,8 +65,7 @@ struct WINinternal
     : m_win(win)
     , m_hDC(NULL)
     , m_hRC(NULL)
-    , m_hWnd(NULL)
-    , m_hWndDummy(NULL)
+    , m_hWnd(NULL)    
     , m_iconified(false)
     , m_visible(true)
   {
@@ -181,20 +180,29 @@ void checkGL(char* msg)
 	}
 }
 
+ #define ATTRIB(a,b) { attribList.push_back(a); attribList.push_back(b); }        
 
 //------------------------------------------------------------------------------
 bool WINinternal::initBase(const NVPWindow::ContextFlags* cflags, NVPWindow* sourcewindow)
 {
-    GLuint PixelFormat;
+	std::vector<int> attribList;	
+
+	HDC hTempDC = NULL;
+	HGLRC hTempRC = NULL;
+	HGLRC hFinalRC = NULL;	
+	GLuint nfmts;
+    int fmt = 0;	
+	bool avail_opengl32_pixelfmt = false;
+	bool avail_opengl32_ctxattrib = false;	
     
     NVPWindow::ContextFlags  settings;
     if (cflags){
       settings = *cflags;
     }
-
+	
+	// Pixel format descriptor
     PIXELFORMATDESCRIPTOR pfd;
     memset(&pfd, 0, sizeof(PIXELFORMATDESCRIPTOR));
-
     pfd.nSize      = sizeof(PIXELFORMATDESCRIPTOR);
     pfd.nVersion   = 1;
     pfd.dwFlags    = PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER;
@@ -202,116 +210,103 @@ bool WINinternal::initBase(const NVPWindow::ContextFlags* cflags, NVPWindow* sou
     pfd.cColorBits = 32;
     pfd.cDepthBits = settings.depth;
     pfd.cStencilBits = settings.stencil;
+    if( settings.stereo ) pfd.dwFlags |= PFD_STEREO;
 
-    if( settings.stereo )
-    {
-      pfd.dwFlags |= PFD_STEREO;
-    }
+	// Create temporary context (so wglGetProcAddress works)
+	hTempDC = GetDC ( m_hTempWnd );
+	fmt = ChoosePixelFormat( hTempDC, &pfd );
+	SetPixelFormat( hTempDC, fmt, &pfd);
+	hTempRC = wglCreateContext( hTempDC );
+	wglMakeCurrent( hTempDC, hTempRC );
 
-    if(settings.MSAA > 1)
-    {
-        m_hDC = GetDC(m_hWndDummy);
-        PixelFormat = ChoosePixelFormat( m_hDC, &pfd );
-        SetPixelFormat( m_hDC, PixelFormat, &pfd);
-        m_hRC = wglCreateContext( m_hDC );
-        wglMakeCurrent( m_hDC, m_hRC );
-        glewInit();
-        ReleaseDC(m_hWndDummy, m_hDC);
-        m_hDC = GetDC( m_hWnd );
-        int attri[] = {
-			WGL_DRAW_TO_WINDOW_ARB, true,
-	        WGL_PIXEL_TYPE_ARB, WGL_TYPE_RGBA_ARB,
-		    WGL_SUPPORT_OPENGL_ARB, true,
-			WGL_ACCELERATION_ARB, WGL_FULL_ACCELERATION_ARB,
-	        WGL_DOUBLE_BUFFER_ARB, true,
-	        WGL_DEPTH_BITS_ARB, settings.depth,
-	        WGL_STENCIL_BITS_ARB, settings.stencil,
-            WGL_SAMPLE_BUFFERS_ARB, 1,
-			WGL_SAMPLES_ARB, settings.MSAA,
-            0,0
-        };
-        GLuint nfmts;
-        int fmt;
-	    if(!wglChoosePixelFormatARB( m_hDC, attri, NULL, 1, &fmt, &nfmts )){
-            wglDeleteContext(m_hRC);
-            return false;
-        }
-        wglDeleteContext(m_hRC);
-        DestroyWindow(m_hWndDummy);
-        m_hWndDummy = NULL;
-        if(!SetPixelFormat( m_hDC, fmt, &pfd))
-            return false;
+	// Check for OpenGL 3.2+ functions
+	avail_opengl32_pixelfmt = ((wglChoosePixelFormatARB = (PFNWGLCHOOSEPIXELFORMATARBPROC) wglGetProcAddress( (LPCSTR) "wglChoosePixelFormatARB")) != NULL);
+	avail_opengl32_ctxattrib = ((wglCreateContextAttribsARB = (PFNWGLCREATECONTEXTATTRIBSARBPROC) wglGetProcAddress( (LPCSTR) "wglCreateContextAttribsARB")) != NULL);
 
-		glEnable ( GL_MULTISAMPLE );
+	// Create context
+	m_hDC = GetDC ( m_hWnd );
+	if (avail_opengl32_pixelfmt && avail_opengl32_ctxattrib) {
+		#define GLCOMPAT
+		// Initialize using OpenGL 3.2 or later
+		// Use modern functions to choose pixel format 		
+		attribList.clear();
+		ATTRIB ( WGL_DRAW_TO_WINDOW_ARB, true );
+		ATTRIB ( WGL_SUPPORT_OPENGL_ARB, true );
+		ATTRIB ( WGL_DOUBLE_BUFFER_ARB, true );
+		ATTRIB ( WGL_ACCELERATION_ARB, WGL_FULL_ACCELERATION_ARB );
+		ATTRIB ( WGL_PIXEL_TYPE_ARB, WGL_TYPE_RGBA_ARB );
+		ATTRIB ( WGL_COLOR_BITS_ARB, 32 );
+	    ATTRIB ( WGL_DEPTH_BITS_ARB, settings.depth );
+	    ATTRIB ( WGL_STENCIL_BITS_ARB, settings.stencil );
+		if ( settings.MSAA > 1 ) {
+			ATTRIB ( WGL_SAMPLE_BUFFERS_ARB, 1 );
+			ATTRIB ( WGL_SAMPLES_ARB, settings.MSAA );
+		}
+        ATTRIB ( 0,0 );
+		if ( !wglChoosePixelFormatARB( m_hDC, &(attribList[0]) , NULL, 1, &fmt, &nfmts )) {
+			nvprintf ( "ERROR: Unable to choose pixel format (MSAA %d). Turn off MSAA.\n", settings.MSAA );
+			nverror();
+		}		
+		// Set modern GL pixel format 
+		DescribePixelFormat ( m_hDC, fmt, sizeof(PIXELFORMATDESCRIPTOR), &pfd );		
+		if( !SetPixelFormat( m_hDC, fmt, &pfd)) {
+			nvprintf ( "ERROR: Unable to set pixel format.\n" );
+			nverror();
+		}	
 
-    } else {
-        m_hDC = GetDC( m_hWnd );
-        PixelFormat = ChoosePixelFormat( m_hDC, &pfd );
-        SetPixelFormat( m_hDC, PixelFormat, &pfd);
-    }
-    m_hRC = wglCreateContext( m_hDC );
-    wglMakeCurrent( m_hDC, m_hRC );
-
-    // calling glewinit NOW because the inside glew, there is mistake to fix...
-    // This is the joy of using Core. The query glGetString(GL_EXTENSIONS) is deprecated from the Core profile.
-    // You need to use glGetStringi(GL_EXTENSIONS, <index>) instead. Sounds like a "bug" in GLEW.
-    glewInit();
-#define GLCOMPAT
-    if(!wglCreateContextAttribsARB)
-        wglCreateContextAttribsARB = (PFNWGLCREATECONTEXTATTRIBSARBPROC)wglGetProcAddress("wglCreateContextAttribsARB");
-    if(wglCreateContextAttribsARB)
-    {
-        HGLRC hRC = NULL;
-        std::vector<int> attribList;
-        #define ADDATTRIB(a,b) { attribList.push_back(a); attribList.push_back(b); }
-        int maj= settings.major;
-        int min= settings.minor;
-        ADDATTRIB(WGL_CONTEXT_MAJOR_VERSION_ARB, maj)
-        ADDATTRIB(WGL_CONTEXT_MINOR_VERSION_ARB, min)
-        if(settings.core)
-            ADDATTRIB(WGL_CONTEXT_PROFILE_MASK_ARB, WGL_CONTEXT_CORE_PROFILE_BIT_ARB)
-        else
-            ADDATTRIB(WGL_CONTEXT_PROFILE_MASK_ARB, WGL_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB)
+		// Create OpenGL context using modern OpenGL 3.2+ functions
+		// * Enables specification of major/minor version, and core/compatibility mode
+		nvprintf ( "Requested GL Version: %d.%d (MSAA=%d)\n", settings.major, settings.minor, settings.MSAA );        
+        attribList.clear();
+        ATTRIB(WGL_CONTEXT_MAJOR_VERSION_ARB, settings.major )
+        ATTRIB(WGL_CONTEXT_MINOR_VERSION_ARB, settings.minor)
+        if(settings.core)			ATTRIB(WGL_CONTEXT_PROFILE_MASK_ARB, WGL_CONTEXT_CORE_PROFILE_BIT_ARB)
+		else						ATTRIB(WGL_CONTEXT_PROFILE_MASK_ARB, WGL_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB)
         int ctxtflags = 0;
-        if(settings.debug)
-            ctxtflags |= WGL_CONTEXT_DEBUG_BIT_ARB;
-        if(settings.robust)
-            ctxtflags |= WGL_CONTEXT_ROBUST_ACCESS_BIT_ARB;
-        if(settings.forward) // use it if you want errors when compat options still used
-            ctxtflags |= WGL_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB;
-        ADDATTRIB(WGL_CONTEXT_FLAGS_ARB, ctxtflags);
-        ADDATTRIB(0, 0)
-        int *p = &(attribList[0]);
-        if (!(hRC = wglCreateContextAttribsARB(m_hDC, 0, p )))
-        {
-            //LOGE("wglCreateContextAttribsARB() failed for OpenGL context.\n");
-            return false;
-        }
-        if (!wglMakeCurrent(m_hDC, hRC)) { 
-            //LOGE("wglMakeCurrent() failed for OpenGL context.\n"); 
-        } else {
-            wglDeleteContext( m_hRC );
-            m_hRC = hRC;
-#ifdef _DEBUG
-            if(!__glewDebugMessageCallbackARB)
-            {
-                __glewDebugMessageCallbackARB = (PFNGLDEBUGMESSAGECALLBACKARBPROC)wglGetProcAddress("glDebugMessageCallbackARB");
-                __glewDebugMessageControlARB  = (PFNGLDEBUGMESSAGECONTROLARBPROC) wglGetProcAddress("glDebugMessageControlARB");
-            }
-            if(__glewDebugMessageCallbackARB)
-            {
-                glEnable(GL_DEBUG_OUTPUT);
-                glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS_ARB);
-                glDebugMessageControlARB(GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, NULL, GL_TRUE);
-                glDebugMessageCallbackARB(myOpenGLCallback, sourcewindow);
-            }
-#endif
-        }
-    }
+        if(settings.debug)          ctxtflags |= WGL_CONTEXT_DEBUG_BIT_ARB;
+        if(settings.robust)         ctxtflags |= WGL_CONTEXT_ROBUST_ACCESS_BIT_ARB;
+        if(settings.forward)        ctxtflags |= WGL_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB;
+        ATTRIB(WGL_CONTEXT_FLAGS_ARB, ctxtflags)
+        ATTRIB(0, 0)        
+		hFinalRC = wglCreateContextAttribsARB( m_hDC, 0, &(attribList[0]) );
+
+		if ( hFinalRC == NULL ) {
+			nvprintf ( "ERROR: Unable to create modern GL context.\n");
+			return false;
+		}
+		nvprintf ( "Using Modern GL Version: %d.%d %s\n", settings.major, settings.minor, (settings.core) ? "core" : "compat" );
+
+	} else {
+		// Initialize using OpenGL *before* 3.2		
+		fmt = ChoosePixelFormat( m_hDC, &pfd );
+		if(!SetPixelFormat( m_hDC, fmt, &pfd)) {
+			nvprintf ( "ERROR: Unable to set pixel format.\n" );
+			nverror();
+		}
+		hFinalRC = wglCreateContext( m_hDC );
+		nvprintf ( "Using Older GL Version: %d.%d\n", settings.major, settings.minor );
+	}	
+	// Delete temporary context
+	wglMakeCurrent ( NULL, NULL );
+	wglDeleteContext( hTempRC ); 
+	ReleaseDC ( m_hTempWnd, hTempDC );
+	DestroyWindow ( m_hTempWnd );
+	
+	// Switch to final context
+	m_hRC = hFinalRC;	
+    wglMakeCurrent (m_hDC, m_hRC );  	
+
+	// Show the Vendor OpenGL version 
+	// *** This is what glewInit uses to initialize the MAXIMUM GL version (not the one selected)
+	const GLubyte* version = glGetString( GL_VERSION );		
+	nvprintf ( "Vendor GL_VERSION: %s\n", version );
+
+    // GLEW Initialize
     glewInit();
 
-    //LOGOK("Loaded Glew\n");
-    //LOGOK("initialized OpenGL basis\n");
+	// Enable Multisample Anti-Aliasing 
+	if ( settings.MSAA > 1 ) glEnable ( GL_MULTISAMPLE );
+
     return true;
 }
 
@@ -725,26 +720,28 @@ bool WINinternal::create(const char* title, int width, int height)
   if(!RegisterClassEx(&winClass) )
     return false;
 
-  DWORD style = WS_CLIPSIBLINGS | WS_CLIPCHILDREN | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_SIZEBOX;
-  DWORD styleEx = WS_EX_APPWINDOW | WS_EX_WINDOWEDGE;
-
-  RECT rect = { 0, 0, width, height };
-  AdjustWindowRectEx(&rect, style,
-    FALSE, styleEx);
-
-  m_hWnd = CreateWindowEx( styleEx, "MY_WINDOWS_CLASS",
-    title ? title : "Viewer",
-    style, 0, 0, rect.right - rect.left, rect.bottom - rect.top, NULL, NULL, 
-    g_hInstance, (LPVOID)NULL );
+  // dummy window
   winClass.lpszClassName = "DUMMY";
   winClass.lpfnWndProc   = DefWindowProc;
   if(!RegisterClassEx(&winClass) )
     return false;
-  m_hWndDummy = CreateWindowEx( NULL, "DUMMY",
+  m_hTempWnd = CreateWindowEx( NULL, "DUMMY",
     "Dummy",
     WS_OVERLAPPEDWINDOW, 0, 0, 10, 10, NULL, NULL, 
     g_hInstance, NULL );
 
+
+  DWORD style = WS_CLIPSIBLINGS | WS_CLIPCHILDREN | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_SIZEBOX;
+  DWORD styleEx = WS_EX_APPWINDOW | WS_EX_WINDOWEDGE;
+
+  // final window
+  RECT rect = { 0, 0, width, height };
+  AdjustWindowRectEx(&rect, style,
+    FALSE, styleEx);
+  m_hWnd = CreateWindowEx( styleEx, "MY_WINDOWS_CLASS",
+    title ? title : "Viewer",
+    style, 0, 0, rect.right - rect.left, rect.bottom - rect.top, NULL, NULL, 
+    g_hInstance, (LPVOID)NULL );
   if( m_hWnd == NULL )
     return false;
 
@@ -767,7 +764,7 @@ void NVPWindow::deactivate()
 }
 
 static const char *g_screenquad_vert =
-	"#version 440 core\n"
+	"#version 400\n"
 	"layout(location = 0) in vec3 vertex;\n"
 	"layout(location = 1) in vec3 normal;\n"
 	"layout(location = 2) in vec3 texcoord;\n"
@@ -782,7 +779,7 @@ static const char *g_screenquad_vert =
 	"}\n";
 
 static const char *g_screenquad_frag =
-	"#version 440\n"
+	"#version 400\n"
 	"uniform sampler2D uTex1;\n"
 	"uniform sampler2D uTex2;\n"
 	"uniform int uTexFlags;\n"
@@ -982,7 +979,7 @@ bool NVPWindow::create(const char* title, const ContextFlags* cflags, int width,
     
     m_debugTitle = title ? title:"Sample";
 
-    if (m_internal->create(m_debugTitle.c_str(), width,height))
+    if ( m_internal->create(m_debugTitle.c_str(), width, height ) )
     {
       // Keep track of the windows
       g_windows.push_back(this);
@@ -1043,7 +1040,7 @@ void NVPWindow::save_frame ( char* fname )
 	free ( buf );
 }
 
-int NVPWindow::run ( const std::string& title, const std::string& shortname, int argc, const char** argv, int width, int height, int Major, int Minor, int GoldenFrame )
+int NVPWindow::run ( const std::string& title, const std::string& shortname, int argc, const char** argv, int width, int height, int Major, int Minor, int MSAA, int GoldenFrame )
 {
 	_CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF );
 	_CrtSetReportMode(_CRT_ERROR, _CRTDBG_MODE_DEBUG | _CRTDBG_MODE_WNDW );
@@ -1098,7 +1095,7 @@ int NVPWindow::run ( const std::string& title, const std::string& shortname, int
     m_cflags.major = Major;
     m_cflags.minor = Minor;
 
-	m_cflags.MSAA = 16;
+	m_cflags.MSAA = MSAA;
 
 	// Activate
 	// - create window

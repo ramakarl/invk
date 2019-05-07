@@ -376,7 +376,7 @@ int sample_main ( int argc, const char** argv )
 	//int w=1920, h=1080;
 	int w=1200, h=900;
 	
-	return sample_obj.run ( "Shapes", "Shapes", argc, argv, w, h, 4, 4 );
+	return sample_obj.run ( "Shapes", "Shapes", argc, argv, w, h, 4, 0, 1 );
 }
 
 void sample_print( int argc, char const *argv)

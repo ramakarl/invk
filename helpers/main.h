@@ -357,7 +357,7 @@
 	  virtual void checkpoint() {}
 
 	  // from WindowProfiler
-	  int run( const std::string &name, const std::string& shortname, int argc, const char** argv, int width, int height, int Major, int Minor, int GoldenFrame=0 );
+	  int run( const std::string &name, const std::string& shortname, int argc, const char** argv, int width, int height, int Major, int Minor, int MSAA, int GoldenFrame=0 );
 	  void initGL ();
 	  void initScreenQuadGL ();
 	  void clearScreenGL ();

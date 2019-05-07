@@ -208,7 +208,12 @@ bool initBase(const NVPWindow::ContextFlags *cflags, NVPWindow *sourceWindow);
 
 };
 
-bool WINinternal::initBase(const NVPWindow::ContextFlags *cflags, NVPWindow *sourceWindow){
+#define ATTRIB(a,b) { attribList.push_back(a); attribList.push_back(b); }  
+
+bool WINinternal::initBase(const NVPWindow::ContextFlags *cflags, NVPWindow *sourceWindow)
+{
+	std::vector<int> attribList;		
+	bool avail_opengl32_ctxattrib = false;
 
     NVPWindow::ContextFlags settings;
     if(cflags){
@@ -216,39 +221,96 @@ bool WINinternal::initBase(const NVPWindow::ContextFlags *cflags, NVPWindow *sou
     }
 
     const char *glxExts = glXQueryExtensionsString(m_dpy,DefaultScreen(m_dpy));
+	ctxErrorOccurred = false;
+    int (*oldHandler) (Display *, XErrorEvent*) = XSetErrorHandler(&ctxErrorHandler);
 
-    glXCreateContextAttribsARBProc glXCreateContextAttribsARB = 0;
-    glXCreateContextAttribsARB  = (glXCreateContextAttribsARBProc) glXGetProcAddressARB((const GLubyte *) "glXCreateContextAttribsARB");
+	// Check for OpenGL 3.2+ functions	
+	avail_opengl32_ctxattrib = ((glXCreateContexAttribsARB = (glXCreateContextAttribsARBProc) glXGetProcAddress( "glXCreateContextAttribsARB" )) != NULL);
 
- 
-    ctxErrorOccurred = false;
-    int (*oldHandler)(Display *, XErrorEvent*) = XSetErrorHandler(&ctxErrorHandler);
+	if ( avail_opengl32_ctxattrib) {
+		#define GLCOMPAT
+		// Initialize using OpenGL 3.2 or later
+		// Use modern functions to choose pixel format 
+		attribList.clear ();
+		ATTRIB ( GLX_X_RENDERABLE    , True );
+		ATTRIB ( GLX_DRAWGLX_DRAWABLE_TYPE   , GLX_WINDOW_BIT );
+		ATTRIB ( GLX_DRAWGLX_RENDER_TYPE     , GLX_RGBA_BIT );
+		ATTRIB ( GLX_DRAWGLX_X_VISUAL_TYPE   , GLX_TRUE_COLOR );
+		ATTRIB ( GLX_DRAWGLX_RED_SIZE        , 8 );
+		ATTRIB ( GLX_DRAWGLX_GREEN_SIZE      , 8 );
+		ATTRIB ( GLX_DRAWGLX_BLUE_SIZE       , 8 );
+		ATTRIB ( GLX_DRAWGLX_ALPHA_SIZE      , 8 );
+		ATTRIB ( GLX_DRAWGLX_DEPTH_SIZE      , 24 );
+		ATTRIB ( GLX_DRAWGLX_STENCIL_SIZE    , 8 );
+		ATTRIB ( GLX_DRAWGLX_DOUBLEBUFFER    , True );
+		if ( settings.MSAA > 1 ) {
+			ATTRIB ( GLX_DRAWGLX_SAMPLE_BUFFERS  , 1 ); 
+			ATTRIB ( GLX_DRAWGLX_SAMPLES         , settings.MSAA );
+		}
+		ATTRIB ( 0, 0 );
+  
+		// Choose modern OpenGL pixel format
+		GLXFBConfig fbconfig = 0;
+		int         fbcount;
+		GLXFBConfig* fbc = glXChooseFBConfig( display, screen, &(attribList[0]), &fbcount );
+		if ( fbc==0x0 || fbcount==0 ) {
+			printf ( "ERROR: Unable to choose FB config (OpenGL 3.2+).\n" );
+			nverror();
+		}
+		// Create modern OpenGL context
+		attribList.clear ();
+		ATTRIB ( GLX_CONTEXT_MAJOR_VERSION_ARB, settings.major )
+        ATTRIB ( GLX_CONTEXT_MINOR_VERSION_ARB, settings.minor )
+		ATTRIB ( GLX_CONTEXT_PROFILE_MASK_ARB, settings.core ? GLX_CONTEXT_CORE_PROFILE_BIT_ARB:GLX_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB )
+		ATTRIB ( 0, 0 );
+		m_glx_context = glXCreateContextAttribsARB (m_dpy, m_glx_fb_config, 0, True, &(attribList[0]) );
+		if ( m_glx_context==NULL ) {
+			printf ( "ERROR: Unable to create context with attribs (OpenGL 3.2+).\n" );
+			nverror();
+		}	
+		nvprintf ( "Using Modern GL Version: %d.%d %s\n", settings.major, settings.minor, (settings.core) ? "core" : "compat" );
+	
+	} else {
+		// Use OpenGL *before* 3.2
+		attribList.clear ();
+		ATTRIB ( GLX_RED_SIZE, 1 )
+		ATTRIB ( GLX_GREEN_SIZE, 1 )
+		ATTRIB ( GLX_BLUE_SIZE, 1 )
+		ATTRIB ( GLX_DEPTH_SIZE, 12 )
+		ATTRIB ( GLX_DOUBLEBUFFER, 1 );
+		ATTRIB ( 0, 0 );
+		XVisualInfo* vi = NULL;
+		if ( !(vi = glXChooseVisual(dpy, DefaultScreen(dpy), &attribList[0] ))) {
+			printf ( "ERROR: Unable to choose visual (OpenGL pre-3.2).\n" );
+			nverror();
+		}
+		m_glx_context = glXCreateContext ( m_dpy, vi, None, True );
+		if ( m_glx_context==NULL ) {
+			printf ( "ERROR: Unable to create context (OpenGL pre-3.2)\n");
+			nverror ();
+		}
+		nvprintf ( "Using Older GL Version: %d.%d\n", settings.major, settings.minor );
+    }; 	
 
-    int contextattribs[] = {
-        GLX_CONTEXT_MAJOR_VERSION_ARB, settings.major,
-        GLX_CONTEXT_MINOR_VERSION_ARB, settings.minor,
-        GLX_CONTEXT_PROFILE_MASK_ARB, settings.core?GLX_CONTEXT_CORE_PROFILE_BIT_ARB:GLX_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB,
-        0
-    }; 
-
-   
-    m_glx_context = glXCreateContextAttribsARB(m_dpy,m_glx_fb_config,0,True,contextattribs);
-
-
-    XSetErrorHandler(oldHandler);
-
-    if(!glXMakeCurrent(m_dpy,m_window,m_glx_context)){
-        printf("Error making glx context current.\n");
+	// Make final context current
+    if (!glXMakeCurrent(m_dpy, m_window, m_glx_context)) {
+        printf("ERROR: Unable to make final context current.\n");
+		nverror();
     }
+	XSetErrorHandler(oldHandler);
 
-   GLenum glewErr = glewInit();
+	// Show the Vendor OpenGL version 
+	// *** This is what glewInit uses to initialize the MAXIMUM GL version (not the one selected)
+	const GLubyte* version = glGetString( GL_VERSION );		
+	nvprintf ( "Vendor GL_VERSION: %s\n", version );
 
-   if(GLEW_OK != glewErr){
-    printf("Error initialising glew: %s.\n",glewGetErrorString(glewErr));
-   }
-
-
-   return true;
+	// GLEW Initialize 
+	GLenum glewErr = glewInit();
+	if(GLEW_OK != glewErr){	
+		printf("ERROR: Initializing glew: %s.\n",glewGetErrorString(glewErr));
+		nverror();
+	}
+	return true;
 }
 
 static int getKeyMods(XEvent &evt){
@@ -441,7 +503,7 @@ bool NVPWindow::create(const char *title, const ContextFlags *cflags, int width,
     return false;
 }
 
-int NVPWindow::run ( const std::string& title, const std::string& shortname, int argc, const char** argv, int width, int height, int Major, int Minor, int GoldenFrame )
+int NVPWindow::run ( const std::string& title, const std::string& shortname, int argc, const char** argv, int width, int height, int Major, int Minor, int MSAA, int GoldenFrame )
 {
     bool vsyncstate = true;
     unsigned int intervalSeconds = 2;
@@ -479,6 +541,7 @@ int NVPWindow::run ( const std::string& title, const std::string& shortname, int
 
     m_cflags.major = Major;
     m_cflags.minor = Minor;
+	m_cflags.MSAA = MSAA;
 
     // this calls NVPWindow::create
     if (!activate(width,height,title.c_str(), &m_cflags)){
