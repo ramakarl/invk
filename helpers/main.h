@@ -22,6 +22,11 @@
 #ifndef __MAIN_H__
 	#define __MAIN_H__
 
+  #include <stdio.h>
+  #include <stdlib.h>
+  #include <string.h>
+
+
 	#pragma warning(disable:4996) // preventing snprintf >> _snprintf_s
 
 	// trick for pragma message so we can write:

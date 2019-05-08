@@ -122,7 +122,9 @@ int Joints::AddJoint ( char* name, float length, Vector3DF angs, int cx, int cy,
 	Joint jnt;	
 	int parent = m_Joints.size()-1;		// use last joint added as parent
 
-	strncpy_s ( jnt.name, 64, name, 64 );
+	strncpy ( jnt.name, name, 64 );
+  jnt.name[63] = '\0';
+
 	jnt.parent = parent;	
 	jnt.pos = Vector3DF(0,0,0);
 	jnt.length = length;

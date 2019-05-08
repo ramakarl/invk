@@ -30,6 +30,8 @@
 #ifndef QUATERNION_H
 	#define QUATERNION_H_
 
+  #include <assert.h>
+
 	#include "vec.h"
 	//#include "matrix.h"
 
