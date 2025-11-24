@@ -1,9 +1,27 @@
+//--------------------------------------------------------------------------------
+// Copyright 2019-2022 (c) Quanta Sciences, Rama Hoetzlein, ramakarl.com
+//
+// * Derivative works may append the above copyright notice but should not remove or modify earlier notices.
+//
+// MIT License:
+// Permission is hereby granted, free of charge, to any person obtaining a copy of this software and 
+// associated documentation files (the "Software"), to deal in the Software without restriction, including without 
+// limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, 
+// and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+// The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+// 
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES 
+// OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS 
+// BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF 
+// OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+//
 
 
 #include "joints.h"
-#include "camera.h"
+#include "camera3d.h"
 #include "main.h"
-#include "nv_gui.h"
+#include "gxlib.h"
+using namespace glib;
 
 #include <stack>
 #include <vector>
@@ -31,31 +49,29 @@ float circleDelta ( float a, float b )
 
 void Joints::Sketch ( Camera3D* cam )
 {
-	Vector3DF dir, ang;
-	Vector3DF a,b,c, p;
+	Vec3F dir, ang;
+	Vec3F a,b,c, p;
 	Matrix4F world, local;	
 
 	if ( m_Joints.size()==0 ) {
-		errorf ( "ERROR: No joints defined.\n" );
+		dbgprintf ( "ERROR: No joints defined.\n" );
+		exit(-1);
 	}
 
-	Vector3DF angs;
+	Vec3F angs;
 	
-
 /*	start2D();
 	char msg[512];
 	sprintf ( msg, "action: %s -> %s (%d of %d)  %4.1f\n", m_CycleSet->getName(m_CCurr.cycle), m_CycleSet->getName(m_CNext.cycle), m_CFrame, m_CEnd, mTargetDist );
 	drawText( 10, 10, msg, 1,1,1,1);
 	end2D();*/
 
-	start3D( cam );
-
 	//-------- draw end effector
 	p = m_Effector;
-	drawBox3D ( p.x-.05, p.y-.05, p.z-.05, p.x+.05, p.y+.05, p.z+.05, 1,1,1, 1 );
+	drawBox3D ( Vec3F(p.x-.05f, p.y-.05f, p.z-.05f), Vec3F(p.x+.05f, p.y+.05f, p.z+.05f), Vec4F(1,1,1,1) );
 	c = m_Goal - m_Effector;
 	c.Normalize();
-	drawLine3D ( p.x, p.y, p.z, p.x+c.x, p.y+c.y, p.z+c.z, 1,0.5,1, 1 );
+	drawLine3D ( p, p+c, Vec4F(1,0.5,1, 1) );
 	
 
 	//-------- draw joints
@@ -68,33 +84,31 @@ void Joints::Sketch ( Camera3D* cam )
 	Matrix4F OiInv;
 	Matrix4F Ri, Rj0, Ri2, pmtx, Mv;
 		
-	Vector3DF u, q, xangs;
+	Vec3F u, q, xangs;
 	
 	for (int n=0; n < m_Joints.size(); n++ ) {
 		
 		p = m_Joints[n].pos;
 		
 		// draw joint center
-		drawBox3D ( p.x-.1, p.y-.1, p.z-.1, p.x+.1, p.y+.1, p.z+.1, 0.6,0.6,0.6, 1 );
+		drawBox3D ( Vec3F(p.x-.1f, p.y-.1f, p.z-.1f), Vec3F(p.x+.1f, p.y+.1f, p.z+.1f), Vec4F(0.6, 0.6, 0.6, 1) );
 
 		// draw joint orientation 
 		local = m_Joints[n].Mworld;
 		local.PostTranslate ( m_Joints[n].pos * -1.0f);			
-		a = Vector3DF(1,0,0); a *= local; 
-		b = Vector3DF(0,1,0); b *= local; 
-		c = Vector3DF(0,0,1); c *= local; 
-		drawLine3D ( p.x, p.y, p.z, p.x+a.x, p.y+a.y, p.z+a.z, 1, 0, 0, 1 );	// red, x-axis
-		drawLine3D ( p.x, p.y, p.z, p.x+b.x, p.y+b.y, p.z+b.z, 0, 1, 0, 1 );	// green, y-axis
-		drawLine3D ( p.x, p.y, p.z, p.x+c.x, p.y+c.y, p.z+c.z, 0, 0, 1, 1 );	// blue, z-axis
+		a = Vec3F(1,0,0); a *= local; 
+		b = Vec3F(0,1,0); b *= local; 
+		c = Vec3F(0,0,1); c *= local; 
+		drawLine3D ( p, p+a, Vec4F(1, 0, 0, 1) );	
+		drawLine3D ( p, p+b, Vec4F(0, 1, 0, 1) );	
+		drawLine3D ( p, p+c, Vec4F(0, 0, 1, 1) );			
 
 		c = b * (m_Joints[n].length - 0.1f);
 		b *= 1.1f;
-		drawLine3D ( p.x+b.x, p.y+b.y, p.z+b.z, p.x+c.x, p.y+c.y, p.z+c.z, 1, 1, 0, 1 );   // bone
+		drawLine3D ( p+b, p+c, Vec4F(1,1,0,1) );   // bone
 
-		drawLine3D ( p.x+b.x, 0, p.z+b.z, p.x+c.x, 0, p.z+c.z, 0.5, 0.5, 0.3, 1 );	// bone shadow
+		drawLine3D ( Vec3F(p.x+b.x, 0, p.z+b.z), Vec3F(p.x+c.x, 0, p.z+c.z), Vec4F(0.5, 0.5, 0.3, 1) );	// bone shadow
 	}
-
-	end3D();
 }
 
 int Joints::getLastChild ( int p )
@@ -111,25 +125,23 @@ void Joints::Clear ()
 	m_Joints.clear ();
 }
 
-void Joints::SetLimits ( int j, Vector3DF lmin, Vector3DF lmax )
+void Joints::SetLimits ( int j, Vec3F lmin, Vec3F lmax )
 {
 	m_Joints[j].min_limit = lmin;
 	m_Joints[j].max_limit = lmax;
 }
 
-int Joints::AddJoint ( char* name, float length, Vector3DF angs, int cx, int cy, int cz )
+int Joints::AddJoint ( char* name, float length, Vec3F angs, int cx, int cy, int cz )
 {
 	Joint jnt;	
 	int parent = m_Joints.size()-1;		// use last joint added as parent
 
-	strncpy ( jnt.name, name, 64 );
-  jnt.name[63] = '\0';
-
+	strncpy_s ( jnt.name, 64, name, 64 );
 	jnt.parent = parent;	
-	jnt.pos = Vector3DF(0,0,0);
+	jnt.pos = Vec3F(0,0,0);
 	jnt.length = length;
 	jnt.angs = angs;
-	jnt.dof = Vector3DI(cx,cy,cz);
+	jnt.dof = Vec3I(cx,cy,cz);
 	jnt.orient.set ( angs );	// quaternion from euler angles
 	jnt.min_limit.Set(-180.f,-180.f,-180.f);
 	jnt.max_limit.Set( 180.f, 180.f, 180.f);
@@ -162,7 +174,7 @@ void Joints::MoveJoint ( int j, int axis_id, float da )
 {
 	if ( j >= m_Joints.size() ) return;
 
-	Vector3DF axis;
+	Vec3F axis;
 	switch ( axis_id ) {
 	case 0: axis.Set(1,0,0); break;
 	case 1: axis.Set(0,1,0); break;
@@ -199,7 +211,7 @@ void Joints::EvaluateJoints ( std::vector<Joint>& joints, Matrix4F& world )
 	// Compute end effector
 	int n = joints.size()-1;	
 	Matrix4F  local = m_Joints[n].Mworld;	
-	Vector3DF b (0.f, m_Joints[n].length, 0.f); 
+	Vec3F b (0.f, m_Joints[n].length, 0.f); 
 	local.PostTranslate ( m_Joints[n].pos * -1.0f);					
 	b *= local; 
 	m_Effector = m_Joints[n].pos + b;
@@ -212,7 +224,7 @@ void Joints::EvaluateJointsRecurse ( std::vector<Joint>& joints, int curr_jnt, M
 	//
 	// local orientation
 	Matrix4F orient;
-	Vector3DF a; 
+	Vec3F a; 
 	// joints[curr_jnt].orient.toEuler ( a );			// cast to Euler ZYX angles first
 	// orient.RotateZYX ( a );						
 	joints[curr_jnt].orient.getMatrix ( orient );		// Ri' = orientation angles (animated)		
@@ -225,7 +237,7 @@ void Joints::EvaluateJointsRecurse ( std::vector<Joint>& joints, int curr_jnt, M
 	joints[curr_jnt].pos = world.getTrans();			// Tworld
 	
 														// translate children to end of bone
-	world.PreTranslate ( Vector3DF(0.f, joints[curr_jnt].length, 0.f) );		// v'' = bone length
+	world.PreTranslate ( Vec3F(0.f, joints[curr_jnt].length, 0.f) );		// v'' = bone length
 
 	// recurse	
 	int child_jnt = joints[curr_jnt].child;
@@ -249,7 +261,7 @@ void Joints::StartIK ()
 	m_Jacobian.Resize ( M, 3 );
 }
 
-void Joints::InverseKinematics ( Vector3DF goal, int maxiter )
+void Joints::InverseKinematics ( Vec3F goal, int maxiter )
 {	
 	Matrix4F world;
 	float dE;
@@ -282,8 +294,8 @@ void Joints::InverseKinematics ( Vector3DF goal, int maxiter )
 
 void Joints::LimitQuaternion ( Quaternion& o, int limitaxis_id, float limitang )
 {
-	Vector3DF angs;	
-	Vector3DF a1, a2;
+	Vec3F angs;	
+	Vec3F a1, a2;
 
 	o.toEuler ( angs );
 	a1 = angs;
@@ -306,10 +318,10 @@ void Joints::LimitQuaternion ( Quaternion& o, int limitaxis_id, float limitang )
 
 void Joints::ApplyJacobianTranspose ( float amt )
 {
-	Vector3DF jT;
-	Vector3DF dE; 
+	Vec3F jT;
+	Vec3F dE; 
 	Quaternion dq, o1;
-	Vector3DF angs, a1, a2, a3, a4, a5, a6;
+	Vec3F angs, a1, a2, a3, a4, a5, a6;
 	float dang;
 	float lz;
 	std::string msg;
@@ -336,7 +348,7 @@ void Joints::ApplyJacobianTranspose ( float amt )
 			} else if ( angs.x + dang > m_Joints[n].max_limit.x ) {
 				LimitQuaternion ( m_Joints[n].orient, 1, m_Joints[n].max_limit.x );				
 			} else {				
-				dq.fromAngleAxis ( dang, Vector3DF(1,0,0) );	// rotate around local X-axis	
+				dq.fromAngleAxis ( dang, Vec3F(1,0,0) );	// rotate around local X-axis	
 				m_Joints[n].orient = m_Joints[n].orient * dq;
 				m_Joints[n].orient.normalize();
 			}									
@@ -354,7 +366,7 @@ void Joints::ApplyJacobianTranspose ( float amt )
 			} else if ( angs.y + dang > m_Joints[n].max_limit.y ) {			
 				LimitQuaternion ( m_Joints[n].orient, 2, m_Joints[n].max_limit.y );					
 			} else {				
-				dq.fromAngleAxis ( dang, Vector3DF(0,1,0) );	// rotate around local Y-axis			
+				dq.fromAngleAxis ( dang, Vec3F(0,1,0) );	// rotate around local Y-axis			
 				m_Joints[n].orient = m_Joints[n].orient * dq;
 				m_Joints[n].orient.normalize();			
 			}
@@ -373,7 +385,7 @@ void Joints::ApplyJacobianTranspose ( float amt )
 			} else if ( angs.z + dang > m_Joints[n].max_limit.z  ) {				
 				LimitQuaternion ( m_Joints[n].orient, 3, m_Joints[n].max_limit.z );							
 			} else {				
-				dq.fromAngleAxis ( dang, Vector3DF(0,0,1) );	// rotate around local Z-axis
+				dq.fromAngleAxis ( dang, Vec3F(0,0,1) );	// rotate around local Z-axis
 				m_Joints[n].orient = m_Joints[n].orient * dq;
 				m_Joints[n].orient.toEuler(a4);
 				m_Joints[n].orient.normalize();
@@ -390,8 +402,8 @@ void Joints::ApplyJacobianTranspose ( float amt )
 
 void Joints::ComputeJacobian ()
 {
-	Vector3DF r, c, axis, delta;
-	Vector3DF dE;
+	Vec3F r, c, axis, delta;
+	Vec3F dE;
 	Matrix4F mtx;
 	
 	// effector delta (dE)

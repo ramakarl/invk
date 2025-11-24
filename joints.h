@@ -13,20 +13,20 @@
 		char		lev;
 		uint		clr;
 		float		length;		// bone length, v''		
-		Vector3DF	pos;		// bone position, T
-		Vector3DI	dof;
+		Vec3F	pos;		// bone position, T
+		Vec3I	dof;
 		Quaternion	orient;		// orientation angles, Ri (converted to ideal format, Mv = T Ri' v'', see Meredith & Maddock paper)
 		Matrix4F	Mworld;		// world transform (computed on-the-fly)
 		int			parent;
 		int			child;
 		int			next;
 		
-		Vector3DF	min_limit;
-		Vector3DF	max_limit;
+		Vec3F	min_limit;
+		Vec3F	max_limit;
 
 		//-- debugging
-		Vector3DF	angs;		// BVH angles (debug purposes, will be removed in future)
-		Vector3DF	bonevec;	// BVH bone vec
+		Vec3F	angs;		// BVH angles (debug purposes, will be removed in future)
+		Vec3F	bonevec;	// BVH bone vec
 	};
 
 	class Camera3D;
@@ -39,13 +39,13 @@
 		
 		void Clear ();
 
-		int AddJoint ( char* name, float length, Vector3DF angs, int cx, int cy, int cz );		
-		void SetLimits ( int j, Vector3DF lmin, Vector3DF lmax );
+		int AddJoint ( char* name, float length, Vec3F angs, int cx, int cy, int cz );		
+		void SetLimits ( int j, Vec3F lmin, Vec3F lmax );
 		void MoveJoint ( int j, int axis_id, float da);
 		void EvaluateJoints ( std::vector<Joint>& joints, Matrix4F& world );			// Evaluate cycle to joints
 		void EvaluateJointsRecurse ( std::vector<Joint>& joints, int curr_jnt, Matrix4F tform );	// Update joint transforms				
 		void StartIK ();
-		void InverseKinematics ( Vector3DF goal, int maxiter=100 );
+		void InverseKinematics ( Vec3F goal, int maxiter=100 );
 		void ComputeJacobian ();
 		void ApplyJacobianTranspose ( float amt );
 		void LimitQuaternion ( Quaternion& o, int axis, float limitang );
@@ -60,8 +60,8 @@
 	
 		std::vector<Joint>		m_Joints;				// joint state
 
-		Vector3DF				m_Goal;
-		Vector3DF				m_Effector;
+		Vec3F				m_Goal;
+		Vec3F				m_Effector;
 		MatrixF					m_Jacobian;		
 	};
 
